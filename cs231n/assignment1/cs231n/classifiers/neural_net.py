@@ -123,8 +123,8 @@ class TwoLayerNet(object):
     grads['W1'] = X.T.dot(dl2) / N
     grads['b1'] = np.sum(dl2, axis=0) / N
     
-    grads['W2'] += reg*W2
-    grads['W1'] += reg*W1
+    grads['W2'] += reg * W2
+    grads['W1'] += reg * W1
     #############################################################################
     #                              END OF YOUR CODE                             #
     #############################################################################
