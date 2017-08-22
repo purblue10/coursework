@@ -236,14 +236,20 @@ class CaptioningRNN(object):
     # a loop.                                                                 #
     ###########################################################################
     captions[:,0] = self._start
+    h = np.zeros((N, max_length, W_proj.shape[1]))
     prev_h, _ = affine_forward(features, W_proj, b_proj)
-    for i in range(1,max_length):
-      embedded_word, _ = word_embedding_forward(captions[:,i-1], W_embed)
-      print embedded_word.shape
-      next_h, _ = rnn_step_forward(embedded_word, prev_h, Wx, Wh, b)
-      temp_affine_out, _ = temporal_affine_forward(next_h, W_vocab, b_vocab)
-      print temp_affine_out
+    
+    for i in range(max_length-1):
+      embedded_word, _ = word_embedding_forward(captions[:,i], W_embed)
       
+      if self.cell_type == 'rnn':
+        rnn_out, _ = rnn_step_forward(embedded_word, prev_h, Wx, Wh, b)
+      elif self.cell_type == 'lstm':
+        break
+      
+      h[:,i,:] = prev_h = rnn_out
+      temp_affine_out, _ = temporal_affine_forward(h[:,:i+1,:], W_vocab, b_vocab)
+      captions[:,i+1] = temp_affine_out[:,i,:].argmax(axis=1)      
     ############################################################################
     #                             END OF YOUR CODE                             #
     ############################################################################
