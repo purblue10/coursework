@@ -259,7 +259,12 @@ def lstm_step_forward(x, prev_h, prev_c, Wx, Wh, b):
   # TODO: Implement the forward pass for a single timestep of an LSTM.        #
   # You may want to use the numerically stable sigmoid implementation above.  #
   #############################################################################
-  pass
+  a = x.dot(Wx) + prev_h.dot(Wh) + b
+  i, f, o, g = np.split(a, 4, axis=1)
+  i, f, o, g = sigmoid(i), sigmoid(f), sigmoid(o), np.tanh(g)
+  next_c = f*prev_c + i*g
+  next_h = o*np.tanh(next_c)
+  cache = (x, prev_h, prev_c, Wx, Wh, b, i, f, o, g, next_c, next_h)
   ##############################################################################
   #                               END OF YOUR CODE                             #
   ##############################################################################
@@ -284,14 +289,29 @@ def lstm_step_backward(dnext_h, dnext_c, cache):
   - dWh: Gradient of hidden-to-hidden weights, of shape (H, 4H)
   - db: Gradient of biases, of shape (4H,)
   """
-  dx, dh, dc, dWx, dWh, db = None, None, None, None, None, None
+  dx, dprev_h, dprev_c, dWx, dWh, db = None, None, None, None, None, None
   #############################################################################
   # TODO: Implement the backward pass for a single timestep of an LSTM.       #
   #                                                                           #
   # HINT: For sigmoid and tanh you can compute local derivatives in terms of  #
   # the output value from the nonlinearity.                                   #
-  #############################################################################
-  pass
+  ############################################################################# 
+  x, prev_h, prev_c, Wx, Wh, b, i, f, o, g, next_c, next_h = cache
+
+  da_o = dnext_h * np.tanh(next_c) * o * (1 - o)
+  dtanh_next_h = o * dnext_h * (1-np.tanh(next_c)**2)
+  dnext = dtanh_next_h + dnext_c
+  dprev_c = f * dnext
+  da_f = prev_c * dnext * f * (1-f)
+  da_i = g * dnext * i * (1 - i)
+  da_g = i * dnext * (1-g**2)
+  da = np.hstack((da_i, da_f, da_o, da_g))
+
+  dx = da.dot(Wx.T)
+  dprev_h = da.dot(Wh.T)
+  dWx = x.T.dot(da)  
+  dWh = prev_h.T.dot(da)
+  db = da.sum(axis=0)
   ##############################################################################
   #                               END OF YOUR CODE                             #
   ##############################################################################
@@ -326,7 +346,17 @@ def lstm_forward(x, h0, Wx, Wh, b):
   # TODO: Implement the forward pass for an LSTM over an entire timeseries.   #
   # You should use the lstm_step_forward function that you just defined.      #
   #############################################################################
-  pass
+  N, T, D = x.shape
+  _, H = h0.shape
+  h = np.zeros((N,T,H))
+  cache = []
+  prev_h, prev_c = h0, np.zeros((N,H))
+  for i in range(T):
+    lstm_out = lstm_step_forward(x[:,i,:], prev_h, prev_c, Wx, Wh, b)
+    h[:,i,:] = prev_h = lstm_out[0]
+    prev_c = lstm_out[1]
+    cache.append(lstm_out[2])
+  
   ##############################################################################
   #                               END OF YOUR CODE                             #
   ##############################################################################
@@ -354,7 +384,24 @@ def lstm_backward(dh, cache):
   # TODO: Implement the backward pass for an LSTM over an entire timeseries.  #
   # You should use the lstm_step_backward function that you just defined.     #
   #############################################################################
-  pass
+  N, T, H = dh.shape
+  _, D = cache[0][0].shape
+  
+  dx = np.zeros((N,T,D))
+  dh0 = np.zeros((N, H))
+  dWx = np.zeros((D, 4*H))
+  dWh = np.zeros((H, 4*H))
+  db = np.zeros(4*H)
+    
+  dnext_c = np.zeros((N,H))
+  dnext_h = np.zeros((N,H))
+  for i in reversed(range(T)):
+    dx[:,i,:], dnext_h, dnext_c, dWx_step, dWh_step, db_step = lstm_step_backward(dh[:,i,:] + dnext_h, dnext_c, cache[i])
+    dWx += dWx_step
+    dWh += dWh_step
+    db += db_step
+
+  dh0 = dnext_h
   ##############################################################################
   #                               END OF YOUR CODE                             #
   ##############################################################################
